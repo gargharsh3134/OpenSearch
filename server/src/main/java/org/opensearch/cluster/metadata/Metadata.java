@@ -79,6 +79,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1183,7 +1184,7 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, To
 
         public Builder() {
             clusterUUID = UNKNOWN_CLUSTER_UUID;
-            indices = new HashMap<>();
+            indices = new LinkedHashMap<>();
             templates = new HashMap<>();
             customs = new HashMap<>();
             previousMetadata = null;
@@ -1198,7 +1199,7 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, To
             this.persistentSettings = metadata.persistentSettings;
             this.hashesOfConsistentSettings = metadata.hashesOfConsistentSettings;
             this.version = metadata.version;
-            this.indices = new HashMap<>(metadata.indices);
+            this.indices = new LinkedHashMap<>(metadata.indices);
             this.templates = new HashMap<>(metadata.templates.getTemplates());
             this.customs = new HashMap<>(metadata.customs);
             this.previousMetadata = metadata;
@@ -1209,6 +1210,32 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, To
             indexMetadataBuilder.version(indexMetadataBuilder.version() + 1);
             IndexMetadata indexMetadata = indexMetadataBuilder.build();
             indices.put(indexMetadata.getIndex().getName(), indexMetadata);
+
+            // Create a list from the entry set of the TreeMap
+            List<Map.Entry<String, IndexMetadata>> indicesMapEnties = new ArrayList<>(indices.entrySet());
+            System.out.println("-----------------printing entries for list1-------------------------------");
+            for (Map.Entry<String, IndexMetadata> entry : indicesMapEnties) {
+                System.out.println("In list1 entries " + entry.getKey() + " value is " + entry.getValue());
+            }
+            // Sort the list by values using a custom comparator
+            Collections.sort(indicesMapEnties, (o1, o2) -> {
+                Long creationTimeDiffEpochs = o1.getValue().getCreationDate() - o2.getValue().getCreationDate();
+                if (creationTimeDiffEpochs == 0) {
+                    return o1.getKey().compareTo(o2.getKey());
+                }
+                return creationTimeDiffEpochs > 0 ? 1 : -1;
+            });
+            System.out.println("-----------------printing entries for list2-------------------------------");
+            for (Map.Entry<String, IndexMetadata> entry : indicesMapEnties) {
+                System.out.println("In list2 entries " + entry.getKey() + " value is " + entry.getValue());
+            }
+
+            indices.clear();
+            System.out.println("-----------------printing entries for map-------------------------------");
+            indicesMapEnties.stream().map(mapEntry -> indices.put(mapEntry.getKey(), mapEntry.getValue()));
+            for (Map.Entry<String, IndexMetadata> entry : indices.entrySet()) {
+                System.out.println("entries " + entry.getKey() + " value is " + entry.getValue());
+            }
             return this;
         }
 
@@ -1221,6 +1248,19 @@ public class Metadata implements Iterable<IndexMetadata>, Diffable<Metadata>, To
                 indexMetadata = IndexMetadata.builder(indexMetadata).version(indexMetadata.getVersion() + 1).build();
             }
             indices.put(indexMetadata.getIndex().getName(), indexMetadata);
+
+            // Create a list from the entry set of the TreeMap
+            List<Map.Entry<String, IndexMetadata>> indicesMapEntries = new ArrayList<>(indices.entrySet());
+            // Sort the list by values using a custom comparator
+            Collections.sort(indicesMapEntries, (o1, o2) -> {
+                Long creationTimeDiffEpochs = o1.getValue().getCreationDate() - o2.getValue().getCreationDate();
+                if (creationTimeDiffEpochs == 0) {
+                    return o1.getKey().compareTo(o2.getKey());
+                }
+                return creationTimeDiffEpochs > 0 ? 1 : -1;
+            });
+            indices.clear();
+            indicesMapEntries.stream().forEach(mapEntry -> indices.put(mapEntry.getKey(), mapEntry.getValue()));
             return this;
         }
 
