@@ -538,7 +538,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
         for (Map.Entry<Index, List<ShardRouting>> entry : indicesToCreate.entrySet()) {
             final Index index = entry.getKey();
             final IndexMetadata indexMetadata = state.metadata().index(index);
-            logger.debug("[{}] creating index", index);
+            logger.info("[{}] creating index", index);
 
             AllocatedIndex<? extends Shard> indexService = null;
             try {

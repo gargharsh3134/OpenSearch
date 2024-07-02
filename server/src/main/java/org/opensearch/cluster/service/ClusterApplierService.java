@@ -652,6 +652,9 @@ public class ClusterApplierService extends AbstractLifecycleComponent implements
                         clusterManagerMetrics.clusterStateListenersHistogram,
                         (double) Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - listenerStartTimeNS)),
                         Optional.of(Tags.create().addTag("Operation", listener.getClass().getSimpleName()))
+
+
+
                     );
                 }
             } catch (Exception ex) {

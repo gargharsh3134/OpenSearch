@@ -745,6 +745,7 @@ public class IndicesService extends AbstractLifecycleComponent
         final boolean writeDanglingIndices
     ) throws IOException {
         ensureChangesAllowed();
+        System.out.println("--------------------Index metadata for index ----------------" + indexMetadata.getCreationDate() + "name is " + indexMetadata.getIndex().getName());
         if (indexMetadata.getIndexUUID().equals(IndexMetadata.INDEX_UUID_NA_VALUE)) {
             throw new IllegalArgumentException("index must have a real UUID found value: [" + indexMetadata.getIndexUUID() + "]");
         }

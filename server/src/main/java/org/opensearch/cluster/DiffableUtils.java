@@ -43,6 +43,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,6 +87,16 @@ public final class DiffableUtils {
     ) {
         assert after != null && before != null;
         return new JdkMapDiff<>(before, after, keySerializer, DiffableValueSerializer.getWriteOnlyInstance());
+    }
+
+    public static <K, T extends Diffable<T>> MapDiff<K, T, Map<K, T>> diff(
+        Map<K, T> before,
+        Map<K, T> after,
+        KeySerializer<K> keySerializer,
+        boolean maintainOrder
+    ) {
+        assert after != null && before != null;
+        return new JdkMapDiff<>(before, after, keySerializer, DiffableValueSerializer.getWriteOnlyInstance(), maintainOrder);
     }
 
     /**
@@ -138,7 +149,11 @@ public final class DiffableUtils {
         }
 
         JdkMapDiff(Map<K, T> before, Map<K, T> after, KeySerializer<K> keySerializer, ValueSerializer<K, T> valueSerializer) {
-            super(keySerializer, valueSerializer);
+            this(before, after, keySerializer, valueSerializer, false);
+        }
+
+        JdkMapDiff(Map<K, T> before, Map<K, T> after, KeySerializer<K> keySerializer, ValueSerializer<K, T> valueSerializer, boolean maintainOrder) {
+            super(keySerializer, valueSerializer, maintainOrder);
             assert after != null && before != null;
 
             for (K key : before.keySet()) {
@@ -163,7 +178,8 @@ public final class DiffableUtils {
 
         @Override
         public Map<K, T> apply(Map<K, T> map) {
-            Map<K, T> builder = new HashMap<>(map);
+            Map<K, T> builder = maintainOrder ? new LinkedHashMap<>() : new LinkedHashMap<>(map);
+            System.out.println("Trying to apply diff for map " + map.getClass());
 
             for (K part : deletes) {
                 builder.remove(part);
@@ -198,6 +214,7 @@ public final class DiffableUtils {
         protected final Map<K, T> upserts; // additions or full updates
         protected final KeySerializer<K> keySerializer;
         protected final ValueSerializer<K, T> valueSerializer;
+        protected final boolean maintainOrder;
 
         protected MapDiff(KeySerializer<K> keySerializer, ValueSerializer<K, T> valueSerializer) {
             this.keySerializer = keySerializer;
@@ -205,6 +222,16 @@ public final class DiffableUtils {
             deletes = new ArrayList<>();
             diffs = new HashMap<>();
             upserts = new HashMap<>();
+            this.maintainOrder = false;
+        }
+
+        protected MapDiff(KeySerializer<K> keySerializer, ValueSerializer<K, T> valueSerializer, boolean maintainOrder) {
+            this.keySerializer = keySerializer;
+            this.valueSerializer = valueSerializer;
+            deletes = new ArrayList<>();
+            diffs = new HashMap<>();
+            upserts = maintainOrder ? new LinkedHashMap<>() : new HashMap<>();
+            this.maintainOrder = maintainOrder;
         }
 
         protected MapDiff(
@@ -219,11 +246,13 @@ public final class DiffableUtils {
             this.deletes = deletes;
             this.diffs = diffs;
             this.upserts = upserts;
+            this.maintainOrder = false;
         }
 
         protected MapDiff(StreamInput in, KeySerializer<K> keySerializer, ValueSerializer<K, T> valueSerializer) throws IOException {
             this.keySerializer = keySerializer;
             this.valueSerializer = valueSerializer;
+            this.maintainOrder = false;
             deletes = in.readList(keySerializer::readKey);
             int diffsCount = in.readVInt();
             diffs = diffsCount == 0 ? Collections.emptyMap() : new HashMap<>(diffsCount);
