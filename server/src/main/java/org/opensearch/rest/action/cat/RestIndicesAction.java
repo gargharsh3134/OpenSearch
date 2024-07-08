@@ -133,7 +133,6 @@ public class RestIndicesAction extends AbstractCatAction {
         }
         final TimeValue clusterManagerNodeTimeout = clusterManagerTimeout;
         final boolean includeUnloadedSegments = request.paramAsBoolean("include_unloaded_segments", false);
-
         return channel -> {
             final ActionListener<Table> listener = ActionListener.notifyOnce(new RestResponseListener<Table>(channel) {
                 @Override
