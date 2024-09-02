@@ -88,7 +88,14 @@ public class RestTable {
         XContentBuilder builder = channel.newBuilder();
         List<DisplayHeader> displayHeaders = buildDisplayHeaders(table, request);
 
-        builder.startArray();
+        if (table.isPaginated()) {
+            assert table.getPaginatedElement() != null : "Paginated element is required in-case nextToken is not null";
+            builder.startObject();
+            builder.field("next_token", table.getNextToken());
+            builder.startArray(table.getPaginatedElement());
+        } else {
+            builder.startArray();
+        }
         List<Integer> rowOrder = getRowOrder(table, request);
         for (Integer row : rowOrder) {
             builder.startObject();
@@ -98,6 +105,9 @@ public class RestTable {
             builder.endObject();
         }
         builder.endArray();
+        if (table.isPaginated()) {
+            builder.endObject();
+        }
         return new BytesRestResponse(RestStatus.OK, builder);
     }
 
@@ -134,6 +144,11 @@ public class RestTable {
                     out.append(" ");
                 }
             }
+            out.append("\n");
+        }
+        // Adding a new row for next_token, in the response if the table is paginated.
+        if (table.isPaginated()) {
+            out.append("next_token" + " " + table.getNextToken());
             out.append("\n");
         }
         out.close();
