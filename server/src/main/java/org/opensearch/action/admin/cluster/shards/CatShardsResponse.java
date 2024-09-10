@@ -13,6 +13,7 @@ import org.opensearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.rest.pagination.ShardBasedPaginationStrategy;
 
 import java.io.IOException;
 
@@ -26,6 +27,8 @@ public class CatShardsResponse extends ActionResponse {
     private ClusterStateResponse clusterStateResponse = null;
 
     private IndicesStatsResponse indicesStatsResponse = null;
+
+    private ShardBasedPaginationStrategy paginationStrategyInstance = null;
 
     public CatShardsResponse() {}
 
@@ -53,5 +56,13 @@ public class CatShardsResponse extends ActionResponse {
 
     public IndicesStatsResponse getIndicesStatsResponse() {
         return this.indicesStatsResponse;
+    }
+
+    public void setPaginationStrategyInstance(ShardBasedPaginationStrategy shardBasedPaginationStrategy) {
+        this.paginationStrategyInstance = shardBasedPaginationStrategy;
+    }
+
+    public ShardBasedPaginationStrategy getPaginationStrategyInstance() {
+        return paginationStrategyInstance;
     }
 }

@@ -14,6 +14,7 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.tasks.TaskId;
 import org.opensearch.rest.action.admin.cluster.ClusterAdminTask;
+import org.opensearch.rest.pagination.PaginatedQueryRequest;
 
 import java.io.IOException;
 import java.util.Map;
@@ -27,6 +28,7 @@ public class CatShardsRequest extends ClusterManagerNodeReadRequest<CatShardsReq
 
     private String[] indices;
     private TimeValue cancelAfterTimeInterval;
+    private PaginatedQueryRequest paginatedQueryRequest;
 
     public CatShardsRequest() {}
 
@@ -53,6 +55,14 @@ public class CatShardsRequest extends ClusterManagerNodeReadRequest<CatShardsReq
 
     public TimeValue getCancelAfterTimeInterval() {
         return this.cancelAfterTimeInterval;
+    }
+
+    public void setPaginatedQueryRequest(PaginatedQueryRequest paginatedQueryRequest) {
+        this.paginatedQueryRequest = paginatedQueryRequest;
+    }
+
+    public PaginatedQueryRequest getPaginatedQueryRequest() {
+        return paginatedQueryRequest;
     }
 
     @Override

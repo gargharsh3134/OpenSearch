@@ -19,9 +19,12 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.NotifyOnceListener;
+import org.opensearch.rest.pagination.ShardBasedPaginationStrategy;
 import org.opensearch.tasks.CancellableTask;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import static org.opensearch.rest.action.list.RestShardsListAction.PAGINATED_LIST_INDICES_ELEMENT_KEY;
 
 /**
  * Perform cat shards action
@@ -44,7 +47,7 @@ public class TransportCatShardsAction extends HandledTransportAction<CatShardsRe
         clusterStateRequest.setShouldCancelOnTimeout(true);
         clusterStateRequest.local(shardsRequest.local());
         clusterStateRequest.clusterManagerNodeTimeout(shardsRequest.clusterManagerNodeTimeout());
-        clusterStateRequest.clear().nodes(true).routingTable(true).indices(shardsRequest.getIndices());
+        clusterStateRequest.clear().nodes(true).routingTable(true).indices(shardsRequest.getIndices()).metadata(true);
         assert parentTask instanceof CancellableTask;
         clusterStateRequest.setParentTask(client.getLocalNodeId(), parentTask.getId());
 
@@ -73,11 +76,22 @@ public class TransportCatShardsAction extends HandledTransportAction<CatShardsRe
             client.admin().cluster().state(clusterStateRequest, new ActionListener<ClusterStateResponse>() {
                 @Override
                 public void onResponse(ClusterStateResponse clusterStateResponse) {
+                    String[] indices = shardsRequest.getIndices();
+                    if (shardsRequest.getPaginatedQueryRequest() != null) {
+                        // Indicates the invoking RestAction is paginated
+                        ShardBasedPaginationStrategy paginationStrategy = new ShardBasedPaginationStrategy(
+                            shardsRequest.getPaginatedQueryRequest(),
+                            PAGINATED_LIST_INDICES_ELEMENT_KEY,
+                            clusterStateResponse.getState()
+                        );
+                        catShardsResponse.setPaginationStrategyInstance(paginationStrategy);
+                        indices = paginationStrategy.getIndicesFromRequestedToken().toArray(new String[0]);
+                    }
                     catShardsResponse.setClusterStateResponse(clusterStateResponse);
                     IndicesStatsRequest indicesStatsRequest = new IndicesStatsRequest();
                     indicesStatsRequest.setShouldCancelOnTimeout(true);
                     indicesStatsRequest.all();
-                    indicesStatsRequest.indices(shardsRequest.getIndices());
+                    indicesStatsRequest.indices(indices);
                     indicesStatsRequest.setParentTask(client.getLocalNodeId(), parentTask.getId());
                     try {
                         client.admin().indices().stats(indicesStatsRequest, new ActionListener<IndicesStatsResponse>() {

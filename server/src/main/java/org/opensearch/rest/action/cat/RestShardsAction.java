@@ -63,6 +63,7 @@ import org.opensearch.index.warmer.WarmerStats;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.rest.action.RestResponseListener;
+import org.opensearch.rest.pagination.PaginatedQueryResponse;
 import org.opensearch.search.suggest.completion.CompletionStats;
 
 import java.time.Instant;
@@ -100,7 +101,7 @@ public class RestShardsAction extends AbstractCatAction {
     }
 
     @Override
-    protected void documentation(StringBuilder sb) {
+    public void documentation(StringBuilder sb) {
         sb.append("/_cat/shards\n");
         sb.append("/_cat/shards/{index}\n");
     }
@@ -113,20 +114,30 @@ public class RestShardsAction extends AbstractCatAction {
         shardsRequest.clusterManagerNodeTimeout(request.paramAsTime("cluster_manager_timeout", shardsRequest.clusterManagerNodeTimeout()));
         shardsRequest.setCancelAfterTimeInterval(request.paramAsTime("cancel_after_time_interval", NO_TIMEOUT));
         shardsRequest.setIndices(indices);
+        shardsRequest.setPaginatedQueryRequest(paginatedQueryRequest);
         parseDeprecatedMasterTimeoutParameter(shardsRequest, request, deprecationLogger, getName());
         return channel -> client.execute(CatShardsAction.INSTANCE, shardsRequest, new RestResponseListener<CatShardsResponse>(channel) {
             @Override
             public RestResponse buildResponse(CatShardsResponse catShardsResponse) throws Exception {
                 ClusterStateResponse clusterStateResponse = catShardsResponse.getClusterStateResponse();
                 IndicesStatsResponse indicesStatsResponse = catShardsResponse.getIndicesStatsResponse();
-                return RestTable.buildResponse(buildTable(request, clusterStateResponse, indicesStatsResponse), channel);
+                PaginatedQueryResponse paginatedQueryResponse = getPaginatedQueryResponse(catShardsResponse);
+                List<ShardRouting> shardRoutings = getShardRoutingResponseList(catShardsResponse, clusterStateResponse);
+                return RestTable.buildResponse(
+                    buildTable(request, clusterStateResponse, indicesStatsResponse, shardRoutings, paginatedQueryResponse),
+                    channel
+                );
             }
         });
     }
 
     @Override
     protected Table getTableWithHeader(final RestRequest request) {
-        Table table = new Table();
+        return getTableWithHeader(request, null);
+    }
+
+    protected Table getTableWithHeader(final RestRequest request, final PaginatedQueryResponse paginatedQueryResponse) {
+        Table table = new Table(paginatedQueryResponse);
         table.startHeaders()
             .addCell("index", "default:true;alias:i,idx;desc:index name")
             .addCell("shard", "default:true;alias:s,sh;desc:shard name")
@@ -295,10 +306,16 @@ public class RestShardsAction extends AbstractCatAction {
     }
 
     // package private for testing
-    Table buildTable(RestRequest request, ClusterStateResponse state, IndicesStatsResponse stats) {
-        Table table = getTableWithHeader(request);
+    Table buildTable(
+        RestRequest request,
+        ClusterStateResponse state,
+        IndicesStatsResponse stats,
+        List<ShardRouting> shardRoutingList,
+        PaginatedQueryResponse paginatedQueryResponse
+    ) {
+        Table table = getTableWithHeader(request, paginatedQueryResponse);
 
-        for (ShardRouting shard : state.getState().routingTable().allShards()) {
+        for (ShardRouting shard : shardRoutingList) {
             ShardStats shardStats = stats.asMap().get(shard);
             CommonStats commonStats = null;
             CommitStats commitStats = null;
@@ -453,5 +470,13 @@ public class RestShardsAction extends AbstractCatAction {
         }
 
         return table;
+    }
+
+    public PaginatedQueryResponse getPaginatedQueryResponse(CatShardsResponse catShardsResponse) {
+        return null;
+    }
+
+    public List<ShardRouting> getShardRoutingResponseList(CatShardsResponse catShardsResponse, ClusterStateResponse clusterStateResponse) {
+        return clusterStateResponse.getState().routingTable().allShards();
     }
 }
