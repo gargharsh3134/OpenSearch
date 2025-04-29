@@ -39,6 +39,8 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateListener;
 import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.indices.SystemIndices;
 
 import java.util.ArrayList;
@@ -107,6 +109,14 @@ public class SystemIndexMetadataUpgradeService implements ClusterStateListener {
             for (Map.Entry<String, IndexMetadata> cursor : indexMetadataMap.entrySet()) {
                 if (cursor.getValue() != lastIndexMetadataMap.get(cursor.getKey())) {
                     if (systemIndices.isSystemIndex(cursor.getValue().getIndex()) != cursor.getValue().isSystem()) {
+                        if (clusterService.isSlowStateTestEnabled()) {
+                            logger.info("Sleeping for 6 seconds in clusterStateUpdate task for systemIndexMetadataUpdate");
+                            try {
+                                Thread.sleep(6000);
+                            } catch (InterruptedException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
                         updatedMetadata.add(IndexMetadata.builder(cursor.getValue()).system(!cursor.getValue().isSystem()).build());
                     }
                 }

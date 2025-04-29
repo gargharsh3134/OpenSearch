@@ -75,6 +75,14 @@ public class ClusterService extends AbstractLifecycleComponent {
         (key) -> Setting.simpleString(key, Property.Dynamic, Property.NodeScope)
     );
 
+    public static final Setting<Boolean> TEST_SLOW_STATE_ENABLED_SETTING = Setting.boolSetting(
+        "cluster.test.slow_state_enabled",
+        false,
+        Setting.Property.Dynamic,
+        Setting.Property.NodeScope
+    );
+    private volatile Boolean slowStateTestEnabled;
+
     /**
      * The node's settings.
      */
@@ -116,6 +124,8 @@ public class ClusterService extends AbstractLifecycleComponent {
         ClusterManagerService clusterManagerService,
         ClusterApplierService clusterApplierService
     ) {
+        this.slowStateTestEnabled = TEST_SLOW_STATE_ENABLED_SETTING.get(settings);
+        clusterSettings.addSettingsUpdateConsumer(TEST_SLOW_STATE_ENABLED_SETTING, this::setSlowStateTestEnabled);
         this.settings = settings;
         this.nodeName = Node.NODE_NAME_SETTING.get(settings);
         this.clusterManagerService = clusterManagerService;
@@ -125,6 +135,14 @@ public class ClusterService extends AbstractLifecycleComponent {
         // Add a no-op update consumer so changes are logged
         this.clusterSettings.addAffixUpdateConsumer(USER_DEFINED_METADATA, (first, second) -> {}, (first, second) -> {});
         this.clusterApplierService = clusterApplierService;
+    }
+
+    public void setSlowStateTestEnabled(Boolean enabled) {
+        this.slowStateTestEnabled = enabled;
+    }
+
+    public Boolean isSlowStateTestEnabled() {
+        return slowStateTestEnabled;
     }
 
     public synchronized void setNodeConnectionsService(NodeConnectionsService nodeConnectionsService) {

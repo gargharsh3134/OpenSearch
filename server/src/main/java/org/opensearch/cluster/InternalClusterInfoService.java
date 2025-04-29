@@ -121,6 +121,7 @@ public class InternalClusterInfoService implements ClusterInfoService, ClusterSt
     private final ThreadPool threadPool;
     private final Client client;
     private final List<Consumer<ClusterInfo>> listeners = new CopyOnWriteArrayList<>();
+    private final ClusterService clusterService;
 
     public InternalClusterInfoService(Settings settings, ClusterService clusterService, ThreadPool threadPool, Client client) {
         this.leastAvailableSpaceUsages = Map.of();
@@ -139,6 +140,7 @@ public class InternalClusterInfoService implements ClusterInfoService, ClusterSt
             DiskThresholdSettings.CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED_SETTING,
             this::setEnabled
         );
+        this.clusterService = clusterService;
     }
 
     private void setEnabled(boolean enabled) {
@@ -179,8 +181,18 @@ public class InternalClusterInfoService implements ClusterInfoService, ClusterSt
             }
         }
 
+        boolean runOnce = true;
         // Clean up info for any removed nodes
         for (DiscoveryNode removedNode : event.nodesDelta().removedNodes()) {
+            if (clusterService.isSlowStateTestEnabled() && runOnce) {
+                logger.info("Sleeping for 6 seconds in InternalClusterInfoService");
+                try {
+                    Thread.sleep(6000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                runOnce = false;
+            }
             if (removedNode.isDataNode()) {
                 logger.trace("Removing node from cluster info: {}", removedNode.getId());
                 if (leastAvailableSpaceUsages.containsKey(removedNode.getId())) {
