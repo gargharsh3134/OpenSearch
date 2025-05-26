@@ -18,6 +18,7 @@ import org.opensearch.cluster.metadata.Metadata.XContentContext;
 import org.opensearch.cluster.metadata.TemplatesMetadata;
 import org.opensearch.common.remote.AbstractClusterMetadataWriteableBlobEntity;
 import org.opensearch.common.remote.AbstractRemoteWritableEntityManager;
+import org.opensearch.common.remote.ReadBlobWithMetrics;
 import org.opensearch.common.remote.RemoteWriteableEntityBlobStore;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
@@ -192,6 +193,22 @@ public class RemoteGlobalMetadataManager extends AbstractRemoteWritableEntityMan
             response -> listener.onResponse(new RemoteReadResult(response, remoteEntity.getType(), component)),
             ex -> listener.onFailure(new RemoteStateTransferException("Download failed for " + component, remoteEntity, ex))
         );
+    }
+
+    @Override
+    protected ActionListener<ReadBlobWithMetrics<Object>> getWrappedReadListenerForMetrics(
+        String component,
+        AbstractClusterMetadataWriteableBlobEntity remoteEntity,
+        ActionListener<ReadBlobWithMetrics<RemoteReadResult>> listener
+    ) {
+        return ActionListener.wrap(response -> {
+            ReadBlobWithMetrics<RemoteReadResult> resultWithMetrics = new ReadBlobWithMetrics<>(
+                new RemoteReadResult(response.blobEntity(), remoteEntity.getType(), component),
+                response.serDeMS(),
+                response.readMS()
+            );
+            listener.onResponse(resultWithMetrics);
+        }, ex -> listener.onFailure(new RemoteStateTransferException("Download failed for " + component, remoteEntity, ex)));
     }
 
     Metadata getGlobalMetadata(String clusterUUID, ClusterMetadataManifest clusterMetadataManifest) {

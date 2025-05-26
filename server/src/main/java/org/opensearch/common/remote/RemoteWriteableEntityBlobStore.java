@@ -46,7 +46,7 @@ public class RemoteWriteableEntityBlobStore<T, U extends RemoteWriteableBlobEnti
      */
     public static final Setting<TimeValue> REMOTE_STORE_SLOW_READ_LOGGING_THRESHOLD_SETTING = Setting.positiveTimeSetting(
         "cluster.remote_store.slow_read_logging_threshold",
-        TimeValue.timeValueSeconds(10),
+        TimeValue.timeValueSeconds(1),
         Setting.Property.Dynamic,
         Setting.Property.NodeScope
     );
@@ -96,12 +96,21 @@ public class RemoteWriteableEntityBlobStore<T, U extends RemoteWriteableBlobEnti
     @Override
     public T read(final U entity) throws IOException {
         assert entity.getFullBlobName() != null;
+        try (InputStream inputStream = transferService.downloadBlob(getBlobPathForDownload(entity), entity.getBlobFileName())) {
+            return entity.deserialize(inputStream);
+        }
+    }
+
+    public ReadBlobWithMetrics<T> readWithMetrics(final U entity) throws IOException {
+        assert entity.getFullBlobName() != null;
         final long readStartTimeNS = System.nanoTime();
         try (InputStream inputStream = transferService.downloadBlob(getBlobPathForDownload(entity), entity.getBlobFileName())) {
             final long deserializeStartTimeNS = System.nanoTime();
             T deserializedBlobEntity = entity.deserialize(inputStream);
-            warnAboutSlowReadIfNeeded(entity, deserializeStartTimeNS, readStartTimeNS);
-            return deserializedBlobEntity;
+            long totalReadTimeMS = Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - readStartTimeNS));
+            long serdeTimeMS = Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - deserializeStartTimeNS));
+            warnAboutSlowReadIfNeeded(entity, serdeTimeMS, totalReadTimeMS);
+            return new ReadBlobWithMetrics<>(deserializedBlobEntity, serdeTimeMS, totalReadTimeMS - serdeTimeMS);
         }
     }
 
@@ -110,6 +119,30 @@ public class RemoteWriteableEntityBlobStore<T, U extends RemoteWriteableBlobEnti
         executorService.execute(() -> {
             try {
                 listener.onResponse(read(entity));
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
+        });
+    }
+
+    @Override
+    public void readAsyncWithMetrics(final U entity, final ActionListener<ReadBlobWithMetrics<T>> listener) {
+        final long queueStartTimeNS = System.nanoTime();
+        executorService.execute(() -> {
+            try {
+                ReadBlobWithMetrics<T> result = readWithMetrics(entity);
+                listener.onResponse(result);
+                final long executionTimeMS = Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - queueStartTimeNS));
+                if (executionTimeMS > slowReadLoggingThreshold.getMillis()) {
+                    logger.warn(
+                        "entity [{}] for [{}] took total [{}] ms to be executed with time spent in reading {} ms and de-serializing {} ms",
+                        entity.getClass().getSimpleName(),
+                        entity.getBlobFileName(),
+                        executionTimeMS,
+                        result.readMS(),
+                        result.serDeMS()
+                    );
+                }
             } catch (Exception e) {
                 listener.onFailure(e);
             }
@@ -149,9 +182,7 @@ public class RemoteWriteableEntityBlobStore<T, U extends RemoteWriteableBlobEnti
         return Base64.getUrlEncoder().withoutPadding().encodeToString(content.getBytes(StandardCharsets.UTF_8));
     }
 
-    private void warnAboutSlowReadIfNeeded(final U entity, final long deserializeStartTimeNS, final long readStartTimeNS) {
-        long totalReadTimeMS = Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - readStartTimeNS));
-        long serdeTimeMS = Math.max(0, TimeValue.nsecToMSec(System.nanoTime() - deserializeStartTimeNS));
+    private void warnAboutSlowReadIfNeeded(final U entity, final long serdeTimeMS, final long totalReadTimeMS) {
         if (totalReadTimeMS > slowReadLoggingThreshold.getMillis()) {
             logger.warn(
                 "entity [{}] for [{}] took [{}] for serde out of total read time [{}] which is above the total warn threshold of [{}]",

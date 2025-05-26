@@ -13,6 +13,7 @@ import org.opensearch.cluster.DiffableUtils;
 import org.opensearch.cluster.DiffableUtils.NonDiffableValueSerializer;
 import org.opensearch.common.remote.AbstractClusterMetadataWriteableBlobEntity;
 import org.opensearch.common.remote.AbstractRemoteWritableEntityManager;
+import org.opensearch.common.remote.ReadBlobWithMetrics;
 import org.opensearch.common.remote.RemoteWriteableEntityBlobStore;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.core.action.ActionListener;
@@ -107,6 +108,22 @@ public class RemoteClusterStateAttributesManager extends AbstractRemoteWritableE
             response -> listener.onResponse(new RemoteReadResult(response, CLUSTER_STATE_ATTRIBUTE, component)),
             ex -> listener.onFailure(new RemoteStateTransferException("Download failed for " + component, remoteEntity, ex))
         );
+    }
+
+    @Override
+    protected ActionListener<ReadBlobWithMetrics<Object>> getWrappedReadListenerForMetrics(
+        String component,
+        AbstractClusterMetadataWriteableBlobEntity remoteEntity,
+        ActionListener<ReadBlobWithMetrics<RemoteReadResult>> listener
+    ) {
+        return ActionListener.wrap(response -> {
+            ReadBlobWithMetrics<RemoteReadResult> resultWithMetrics = new ReadBlobWithMetrics<>(
+                new RemoteReadResult(response.blobEntity(), CLUSTER_STATE_ATTRIBUTE, component),
+                response.serDeMS(),
+                response.readMS()
+            );
+            listener.onResponse(resultWithMetrics);
+        }, ex -> listener.onFailure(new RemoteStateTransferException("Download failed for " + component, remoteEntity, ex)));
     }
 
     public DiffableUtils.MapDiff<String, ClusterState.Custom, Map<String, ClusterState.Custom>> getUpdatedCustoms(
